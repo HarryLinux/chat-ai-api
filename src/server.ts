@@ -104,15 +104,29 @@ app.post("/chat", async (req: Request, res: Response): Promise<any> => {
         .json({ error: "User not found. Please register first." });
     }
 
+    // Fetch user's past messages for context
+    const chatHistory = await db
+      .select()
+      .from(chats)
+      .where(eq(chats.userId, userId))
+      .orderBy(chats.created_at)
+      .limit(10);
+
+    // Format the chat history for Open AI
+    const conversation: ChatCompletionMessageParam[] = chatHistory.flatMap(
+      (chat) => [
+        { role: "user", content: chat.message },
+        { role: "assistant", content: chat.reply },
+      ]
+    );
+
+    // Add latest user messages to the conversation
+    conversation.push({ role: "user", content: message, name: "user" });
+
     // Send message to OpenAI GPT-5-nano
     const response = await openai.chat.completions.create({
       model: "gpt-5-nano",
-      messages: [
-        {
-          role: "user",
-          content: message,
-        },
-      ],
+      messages: conversation as ChatCompletionMessageParam[],
     });
 
     const aiMessage: string =
